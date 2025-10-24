@@ -69,17 +69,30 @@
 <script>
 import axios from 'axios';
 import { StarFilled, Delete } from '@element-plus/icons-vue';
+import {openDB} from 'idb';
 export default {
   name: 'UserSearch',
   components: { StarFilled, Delete },
+
   data() {
     return {
       username: '',
       users: [],
       loading: false,
       error: null,
-      bookmarks: JSON.parse(localStorage.getItem('bookmarks')) || []
+      bookmarks:  [],
+      db:null
     };
+  },
+
+  async created() {
+    this.db=await openDB('github-user-search',1,{
+      upgrade(db){
+        db.createObjectStore('bookmarks',{keyPath:'id'});
+      }
+    });
+    this.bookmarks=await this.db.getAll('bookmarks'); 
+    console.log('成功创建DB数据库并获取所有保存的书签');
   },
   methods: {
     async searchUsers() {
@@ -97,21 +110,24 @@ export default {
         this.loading = false;
       }
     },
-    toggleBookmark(user) {
+    async toggleBookmark(user) {
       const index = this.bookmarks.findIndex(b => b.id === user.id);
       if (index === -1) {
-        this.bookmarks.push({ id: user.id, login: user.login, avatar_url: user.avatar_url });
+        const bookmark={ id: user.id, login: user.login, avatar_url: user.avatar_url };
+        this.bookmarks.push(bookmark);
+        await this.db.put('bookmarks',bookmark);
       } else {
         this.bookmarks.splice(index, 1);
+        await this.db.delete('bookmarks',user.id);
       }
-      localStorage.setItem('bookmarks', JSON.stringify(this.bookmarks));
+      
     },
     isBookmarked(user) {
       return this.bookmarks.some(b => b.id === user.id);
     },
-    removeBookmark(bookmark) {
+    async removeBookmark(bookmark) {
       this.bookmarks = this.bookmarks.filter(b => b.id !== bookmark.id);
-      localStorage.setItem('bookmarks', JSON.stringify(this.bookmarks));
+      await this.db.delete('bookmarks',bookmark.id);
     }
   }
 };
